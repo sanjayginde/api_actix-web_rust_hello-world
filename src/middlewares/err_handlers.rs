@@ -2,9 +2,8 @@ use crate::types::ErrorMessage;
 use actix_web::{
     dev::ServiceResponse,
     http::StatusCode,
-    middleware::errhandlers::{ErrorHandlerResponse, ErrorHandlers},
-    web::HttpResponse,
-    Result,
+    middleware::{ErrorHandlerResponse, ErrorHandlers},
+    HttpResponse, Result,
 };
 
 pub fn err_handlers<B: 'static>() -> ErrorHandlers<B> {
@@ -20,7 +19,7 @@ fn internal_error<B>(res: ServiceResponse<B>) -> Result<ErrorHandlerResponse<B>>
         message: "Internal server error".to_string(),
     });
     Ok(ErrorHandlerResponse::Response(
-        res.into_response(http_res.into_body()),
+        res.into_response(http_res.map_into_right_body()),
     ))
 }
 
@@ -31,6 +30,6 @@ fn not_found<B>(res: ServiceResponse<B>) -> Result<ErrorHandlerResponse<B>> {
         message: "Not Found".to_string(),
     });
     Ok(ErrorHandlerResponse::Response(
-        res.into_response(http_res.into_body()),
+        res.into_response(http_res.map_into_right_body()),
     ))
 }

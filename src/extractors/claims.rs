@@ -1,6 +1,5 @@
 use crate::types::ErrorMessage;
 use actix_web::{
-    client::Client,
     error::ResponseError,
     http::{StatusCode, Uri},
     Error, FromRequest, HttpResponse,
@@ -8,6 +7,7 @@ use actix_web::{
 use actix_web_httpauth::{
     extractors::bearer::BearerAuth, headers::www_authenticate::bearer::Bearer,
 };
+use awc::Client;
 use derive_more::Display;
 use jsonwebtoken::{
     decode, decode_header,
@@ -87,14 +87,15 @@ pub struct Claims {
 
 impl Claims {
     pub fn validate_permissions(&self, required_permissions: &HashSet<String>) -> bool {
-        self.permissions.as_ref().map_or(false, |permissions| permissions.is_superset(required_permissions))
+        self.permissions.as_ref().map_or(false, |permissions| {
+            permissions.is_superset(required_permissions)
+        })
     }
 }
 
 impl FromRequest for Claims {
     type Error = Error;
     type Future = Pin<Box<dyn Future<Output = Result<Self, Self::Error>>>>;
-    type Config = ();
 
     fn from_request(
         req: &actix_web::HttpRequest,
@@ -110,6 +111,7 @@ impl FromRequest for Claims {
                 ClientError::NotFound("kid not found in token header".to_string())
             })?;
             let domain = config.domain.as_str();
+
             let jwks: JwkSet = Client::new()
                 .get(
                     Uri::builder()
@@ -120,9 +122,12 @@ impl FromRequest for Claims {
                         .unwrap(),
                 )
                 .send()
-                .await?
+                .await
+                .unwrap()
                 .json()
-                .await?;
+                .await
+                .unwrap();
+
             let jwk = jwks
                 .find(&kid)
                 .ok_or_else(|| ClientError::NotFound("No JWK found for kid".to_string()))?;
@@ -130,7 +135,7 @@ impl FromRequest for Claims {
                 AlgorithmParameters::RSA(ref rsa) => {
                     let mut validation = Validation::new(Algorithm::RS256);
                     validation.set_audience(&[config.audience]);
-                    validation.set_iss(&[Uri::builder()
+                    validation.set_issuer(&[Uri::builder()
                         .scheme("https")
                         .authority(domain)
                         .path_and_query("/")
